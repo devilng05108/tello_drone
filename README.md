@@ -1,11 +1,10 @@
-# Tello-Video
+# Tello EDU Drone
 
-This is an example using the Tello SDK v1.3.0.0 and above to receive video stream from Tello camera,decode the video stream and show the image by GUI.
+This is an project using the Tello SDK  to receive video stream from Tello camera,decode the video stream and show the image by GUI.
 
  - Written in Python 2.7
  - Tello SDK v1.3.0.0 and above(with h.264 video streaming)
  - This example includes a simple UI build with Tkinter to interact with Tello
- - Interactive control of Tello based on human movement is achieved via body pose recognition module.
 
 ## Prerequisites
 

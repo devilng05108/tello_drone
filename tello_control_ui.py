@@ -12,9 +12,11 @@ import sys
 
 class TelloUI:
 
-    """Wrapper class to enable the GUI."""
+    """Wrapper class to enable the GUI"""
 
+    """ intializes the GUI of Tkinter and pass in tello.py """
     def __init__(self,tello,outputpath):
+
         """
         Initial all the element of the GUI,support by Tkinter
 
@@ -26,15 +28,15 @@ class TelloUI:
 
         self.tello = tello # videostream device
         self.outputPath = outputpath # the path that save pictures created by clicking the takeSnapshot button 
-        self.frame = None  # frame read from h264decoder and used for pose recognition 
+        self.frame = None  # frame read from h264decoder
         self.thread = None # thread of the Tkinter mainloop
         self.stopEvent = None  
         
         # control variables
-        self.distance = 0.1  # default distance for 'move' cmd
+        self.distance = 0.2  # default distance for 'move' cmd
         self.degree = 30  # default degree for 'cw' or 'ccw' cmd
 
-        # if the flag is TRUE,the auto-takeoff thread will stop waiting for the response from tello
+        # if the flag is TRUE,the thread will stop waiting for the response from tello
         self.quit_waiting_flag = False
         
         # initialize the root window and image panel
@@ -51,9 +53,9 @@ class TelloUI:
         self.btn_pause.pack(side="bottom", fill="both",
                             expand="yes", padx=10, pady=5)
 
-        self.btn_landing = tki.Button(
+        self.btn_openCommand = tki.Button(
             self.root, text="Open Command Panel", relief="raised", command=self.openCmdWindow)
-        self.btn_landing.pack(side="bottom", fill="both",
+        self.btn_openCommand.pack(side="bottom", fill="both",
                               expand="yes", padx=10, pady=5)
         
         # start a thread that constantly pools the video sensor for
@@ -68,6 +70,8 @@ class TelloUI:
 
         # the sending_command will send command to tello every 5 seconds
         self.sending_command_thread = threading.Thread(target = self._sendingCommand)
+
+    """display video captured by drone in control panel """  
     def videoLoop(self):
         """
         The mainloop thread of Tkinter 
@@ -75,7 +79,7 @@ class TelloUI:
             RuntimeError: To get around a RunTime error that Tkinter throws due to threading.
         """
         try:
-            # start the thread that get GUI image and drwa skeleton 
+            # start the thread that get GUI image and draw skeleton 
             time.sleep(0.5)
             self.sending_command_thread.start()
             while not self.stopEvent.is_set():                
@@ -89,7 +93,7 @@ class TelloUI:
             # transfer the format from frame to image         
                 image = Image.fromarray(self.frame)
 
-            # we found compatibility problem between Tkinter,PIL and Macos,and it will 
+            # There is compatibility problem between Tkinter,PIL and Macos,and it will 
             # sometimes result the very long preriod of the "ImageTk.PhotoImage" function,
             # so for Macos,we start a new thread to execute the _updateGUIImage function.
                 if system =="Windows" or system =="Linux":                
@@ -101,14 +105,14 @@ class TelloUI:
                     time.sleep(0.03)                                                            
         except RuntimeError, e:
             print("[INFO] caught a RuntimeError")
-
-           
+         
+    """Used to update the GUI image if issues happen with macOS"""
     def _updateGUIImage(self,image):
         """
         Main operation to initial the object of image,and update the GUI panel 
         """  
         image = ImageTk.PhotoImage(image)
-        # if the panel none ,we need to initial it
+        # if the panel none ,we need to initialize it
         if self.panel is None:
             self.panel = tki.Label(image=image)
             self.panel.image = image
@@ -118,16 +122,14 @@ class TelloUI:
             self.panel.configure(image=image)
             self.panel.image = image
 
-            
-    def _sendingCommand(self):
-        """
-        start a while loop that sends 'command' to tello every 5 second
-        """    
+    """Make Tello drone to be in command mode """  
+    def _sendingCommand(self):   
 
         while True:
             self.tello.send_command('command',0)        
             time.sleep(5)
 
+    """Used to stop waiting for response from tello drone when closes"""
     def _setQuitWaitingFlag(self):  
         """
         set the variable as TRUE,it will stop computer waiting for response from tello  
@@ -136,7 +138,7 @@ class TelloUI:
    
     def openCmdWindow(self):
         """
-        open the cmd window and initial all the button and text
+        open the cmd window and initialize all the button and text
         """        
         panel = Toplevel(self.root)
         panel.wm_title("Command Panel")
@@ -242,8 +244,8 @@ class TelloUI:
         self.degree_bar.set(30)
         self.degree_bar.pack(side="right")
 
-        self.btn_distance = tki.Button(panel, text="Set Degree", relief="raised", command=self.updateDegreebar)
-        self.btn_distance.pack(side="right", fill="both",
+        self.btn_degree = tki.Button(panel, text="Set Degree", relief="raised", command=self.updateDegreebar)
+        self.btn_degree.pack(side="right", fill="both",
                                expand="yes", padx=10, pady=5)
 
     def openFlipWindow(self):
@@ -288,7 +290,6 @@ class TelloUI:
         # save the file
         cv2.imwrite(p, cv2.cvtColor(self.frame, cv2.COLOR_RGB2BGR))
         print("[INFO] saved {}".format(filename))
-
 
     def pauseVideo(self):
         """
@@ -373,19 +374,14 @@ class TelloUI:
 
     def updateDegreebar(self):
         self.degree = self.degree_bar.get()
-        print 'reset distance to %d' % self.degree
-
-    def on_esc_press(self,event):
-        print("Interrupting...")
-        self.tello.interruptPointer = False
-        sys.exit()
+        print 'reset degree to %d' % self.degree
 
     def on_keypress_w(self, event):
-        print "up %d m" % self.distance
+        print "up %.1f m" % self.distance
         self.telloUp(self.distance)
-
+       
     def on_keypress_s(self, event):
-        print "down %d m" % self.distance
+        print "down %.1f m" % self.distance
         self.telloDown(self.distance)
 
     def on_keypress_a(self, event):
@@ -393,29 +389,25 @@ class TelloUI:
         self.tello.rotate_ccw(self.degree)
 
     def on_keypress_d(self, event):
-        print "cw %d m" % self.degree
+        print "cw %d degree" % self.degree
         self.tello.rotate_cw(self.degree)
 
     def on_keypress_up(self, event):
-        print "forward %d m" % self.distance
+        print "forward %.1f m" % self.distance
         self.telloMoveForward(self.distance)
 
     def on_keypress_down(self, event):
-        print "backward %d m" % self.distance
+        print "backward %.1f m" % self.distance
         self.telloMoveBackward(self.distance)
 
     def on_keypress_left(self, event):
-        print "left %d m" % self.distance
+        print "left %.1f m" % self.distance
         self.telloMoveLeft(self.distance)
 
     def on_keypress_right(self, event):
-        print "right %d m" % self.distance
+        print "right %.1f m" % self.distance
         self.telloMoveRight(self.distance)
 
-    def on_keypress_enter(self, event):
-        if self.frame is not None:
-            self.registerFace()
-        self.tmp_f.focus_set()
 
     def onClose(self):
         """

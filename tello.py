@@ -7,14 +7,17 @@ import sys
 
 
 class Tello:
-
-    delay = 8
+    # for preplan route delay & move delay & landing delay
+    delay = 3 
+    # for rotating & flip delay
     short_delay = 2
-    interruptPointer = False
+    # for take off delay
+    fly_delay = 4
 
 
     """Wrapper class to interact with the Tello drone."""
 
+    """Initializes the connection to Tello drone"""
     def __init__(self, local_ip, local_port, imperial=False, command_timeout=.3, tello_ip='192.168.10.1',
                  tello_port=8889):
         """
@@ -29,6 +32,7 @@ class Tello:
         :param tello_port (int): Tello port.
         """
 
+        #  initializes variables
         self.abort_flag = False
         self.decoder = libh264decoder.H264Decoder()
         self.command_timeout = command_timeout
@@ -44,13 +48,13 @@ class Tello:
         self.last_height = 0
         self.socket.bind((local_ip, local_port))
 
-        # thread for receiving cmd ack
+        # thread for receiving command
         self.receive_thread = threading.Thread(target=self._receive_thread)
         self.receive_thread.daemon = True
 
         self.receive_thread.start()
 
-        # to receive video -- send cmd: command, streamon
+        # to receive video & command -- send cmd: command, streamon
         self.socket.sendto(b'command', self.tello_address)
         print ('sent: command')
         self.socket.sendto(b'streamon', self.tello_address)
@@ -64,13 +68,14 @@ class Tello:
 
         self.receive_video_thread.start()
 
-
+    """ Used to close local socket when program quits"""
     def __del__(self):
         """Closes the local socket."""
 
         self.socket.close()
         self.socket_video.close()
     
+    """Used to return the camera frame for display"""
     def read(self):
         """Return the last frame from camera."""
         if self.is_freeze:
@@ -78,12 +83,14 @@ class Tello:
         else:
             return self.frame
 
+    """Used to pause the video output"""
     def video_freeze(self, is_freeze=True):
         """Pause video output -- set is_freeze to True"""
         self.is_freeze = is_freeze
         if is_freeze:
             self.last_frame = self.frame
 
+    """ thread for receiving command"""
     def _receive_thread(self):
         """Listen to responses from the Tello.
 
@@ -97,6 +104,7 @@ class Tello:
             except socket.error as exc:
                 print ("Caught exception socket.error : %s" % exc)
 
+    """ thread for receiving video stream"""
     def _receive_video_thread(self):
         """
         Listens for video streaming (raw h264) from the Tello.
@@ -118,6 +126,7 @@ class Tello:
             except socket.error as exc:
                 print ("Caught exception socket.error : %s" % exc)
     
+    """ Used to decode video stream """
     def _h264_decode(self, packet_data):
         """
         decode raw h264 format data from Tello
@@ -140,6 +149,7 @@ class Tello:
 
         return res_frame_list
 
+    """ Send command to tello with custom delay """
     def send_command(self, command,delay):
         """
         Send a command to the Tello and wait for a response.
@@ -175,6 +185,7 @@ class Tello:
 
         return response
     
+    """ flag to check for response timeout in send_command """
     def set_abort_flag(self):
         """
         Sets self.abort_flag to True.
@@ -196,34 +207,7 @@ class Tello:
 
         """
 
-        return self.send_command('takeoff',7)
-
-    def set_speed(self, speed):
-        """
-        Sets speed.
-
-        This method expects KPH or MPH. The Tello API expects speeds from
-        1 to 100 centimeters/second.
-
-        Metric: .1 to 3.6 KPH
-        Imperial: .1 to 2.2 MPH
-
-        Args:
-            speed (int|float): Speed.
-
-        Returns:
-            str: Response from Tello, 'OK' or 'FALSE'.
-
-        """
-
-        speed = float(speed)
-
-        if self.imperial is True:
-            speed = int(round(speed * 44.704))
-        else:
-            speed = int(round(speed * 27.7778))
-
-        return self.send_command('speed %s' % speed,2)
+        return self.send_command('takeoff',self.fly_delay)
 
     def rotate_cw(self, degrees):
         """
@@ -359,11 +343,7 @@ class Tello:
 
         """
 
-        return self.send_command('land',5)
-
-    def interrupt(self):
-        self.interruptPointer = True
-        return self.send_command('stop',0)
+        return self.send_command('land',self.delay)
 
     def preplan(self):
         # Travel to/from starting checkpoint 0 from/to the charging base
@@ -376,13 +356,11 @@ class Tello:
 
         print("Running preplan route")
 
-        # Start at checkpoint 1 and print destination
+        # Start at checkpoint 0 and print destination
         print("From the charging base to the starting checkpoint of sweep pattern.\n")
 
-        self.interruptPointer = False
-
         self.send_command(frombase[0] + " " + str(frombase[1]),self.delay)
-        self.send_command(frombase[2] + " " + str(frombase[3]),5)
+        self.send_command(frombase[2] + " " + str(frombase[3]),self.short_delay)
 
         print("Current location: Checkpoint 0 " +  "\n")
 
@@ -390,27 +368,23 @@ class Tello:
             if i == len(checkpoint)-1:
                 print("Returning to Checkpoint 0. \n")
 
-            if self.interruptPointer == True:
-                print("Interrupting preplan..") 
-                break
-
             self.send_command(checkpoint[i][1] + " " + str(checkpoint[i][2]),self.delay)
-            self.send_command(checkpoint[i][3] + " " + str(checkpoint[i][4]),5)
+            self.send_command(checkpoint[i][3] + " " + str(checkpoint[i][4]),self.short_delay)
 
             print("Arrived at current location: Checkpoint " + str(checkpoint[i][0]) + "\n")
-            time.sleep(4)
+            time.sleep(2)
 
         # Reach back at Checkpoint 0
         print("Complete sweep. Return to charging base.\n")
         self.send_command(tobase[0] + " " + str(tobase[1]),self.delay)
-        self.send_command(tobase[2] + " " + str(tobase[3]),5)
+        self.send_command(tobase[2] + " " + str(tobase[3]),self.short_delay)
 
         # Turn to original direction before land
         print("Turn to original direction before land.\n")
-        self.send_command("cw 180",5)
+        self.send_command("cw 180",self.short_delay)
 
         # Land
-        self.send_command("land",3)
+        self.send_command("land",self.delay)
 
     def move(self, direction, distance):
         """Moves in a direction for a distance.
@@ -437,7 +411,7 @@ class Tello:
         else:
             distance = int(round(distance * 100))
 
-        return self.send_command('%s %s' % (direction, distance),5)
+        return self.send_command('%s %s' % (direction, distance), self.delay)
 
     def move_backward(self, distance):
         """Moves backward for a distance.
@@ -522,3 +496,6 @@ class Tello:
         """
 
         return self.move('up', distance)
+
+    def interrupt(self):
+        return self.send_command('stop',0)
